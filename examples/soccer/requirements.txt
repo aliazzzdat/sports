@@ -1,2 +1,4 @@
 ultralytics
 gdown
+gradio
+git+https://github.com/roboflow/sports.git

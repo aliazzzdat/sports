@@ -1,9 +1,9 @@
 import argparse
-from enum import Enum
 from typing import Iterator, List
 
 import os
 import cv2
+import gdown
 import numpy as np
 import supervision as sv
 from tqdm import tqdm
@@ -68,19 +68,6 @@ ELLIPSE_LABEL_ANNOTATOR = sv.LabelAnnotator(
     text_thickness=1,
     text_position=sv.Position.BOTTOM_CENTER,
 )
-
-
-class Mode(Enum):
-    """
-    Enum class representing different modes of operation for Soccer AI video analysis.
-    """
-    PITCH_DETECTION = 'PITCH_DETECTION'
-    PLAYER_DETECTION = 'PLAYER_DETECTION'
-    BALL_DETECTION = 'BALL_DETECTION'
-    PLAYER_TRACKING = 'PLAYER_TRACKING'
-    TEAM_CLASSIFICATION = 'TEAM_CLASSIFICATION'
-    RADAR = 'RADAR'
-
 
 def get_crops(frame: np.ndarray, detections: sv.Detections) -> List[np.ndarray]:
     """
@@ -386,23 +373,50 @@ def run_radar(source_video_path: str, device: str) -> Iterator[np.ndarray]:
         yield annotated_frame
 
 
-def main(source_video_path: str, target_video_path: str, device: str, mode: Mode) -> None:
-    if mode == Mode.PITCH_DETECTION:
+def main(source_video_path: str, target_video_path: str, device: str, mode: str, display: bool) -> None:
+    # Check if 'data' directory does not exist and then create it
+    data_dir = os.path.join(PARENT_DIR, 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+        print("'data' directory created.")
+        # Define the files to download
+        sample_files_to_download = {
+            'football-ball-detection.pt': '1isw4wx-MK9h9LMr36VvIWlJD6ppUvw7V',
+            'football-player-detection.pt': '17PXFNlx-jI7VjVo_vQnB1sONjRyvoB-q',
+            'football-pitch-detection.pt': '1Ma5Kt86tgpdjCTKfum79YMgNnSjcoOyf',
+            '0bfacc_0.mp4': '12TqauVZ9tLAv8kWxTTBFWtgt2hNQ4_ZF',
+            '2e57b9_0.mp4': '19PGw55V8aA6GZu5-Aac5_9mCy3fNxmEf',
+            '08fd33_0.mp4': '1OG8K6wqUw9t7lp9ms1M48DxRhwTYciK-',
+            '573e61_0.mp4': '1yYPKuXbHsCxqjA9G-S6aeR2Kcnos8RPU',
+            '121364_0.mp4': '1vVwjW1dE1drIdd4ZSILfbCGPD4weoNiu'
+        }
+
+        # Download the files
+        for filename, file_id in sample_files_to_download.items():
+            output_path = os.path.join(data_dir, filename)
+            if not os.path.exists(output_path):
+                url = f"https://drive.google.com/uc?id={file_id}"
+                gdown.download(url, output_path, quiet=False)
+            else:
+                print(f"'{filename}' already exists, skipping download.")
+
+        print("All files have been downloaded.")
+    if mode == "PITCH_DETECTION":
         frame_generator = run_pitch_detection(
             source_video_path=source_video_path, device=device)
-    elif mode == Mode.PLAYER_DETECTION:
+    elif mode == "PLAYER_DETECTION":
         frame_generator = run_player_detection(
             source_video_path=source_video_path, device=device)
-    elif mode == Mode.BALL_DETECTION:
+    elif mode == "BALL_DETECTION":
         frame_generator = run_ball_detection(
             source_video_path=source_video_path, device=device)
-    elif mode == Mode.PLAYER_TRACKING:
+    elif mode == "PLAYER_TRACKING":
         frame_generator = run_player_tracking(
             source_video_path=source_video_path, device=device)
-    elif mode == Mode.TEAM_CLASSIFICATION:
+    elif mode == "TEAM_CLASSIFICATION":
         frame_generator = run_team_classification(
             source_video_path=source_video_path, device=device)
-    elif mode == Mode.RADAR:
+    elif mode == "RADAR":
         frame_generator = run_radar(
             source_video_path=source_video_path, device=device)
     else:
@@ -412,10 +426,10 @@ def main(source_video_path: str, target_video_path: str, device: str, mode: Mode
     with sv.VideoSink(target_video_path, video_info) as sink:
         for frame in frame_generator:
             sink.write_frame(frame)
-
-            cv2.imshow("frame", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            if display:
+                cv2.imshow("frame", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
         cv2.destroyAllWindows()
 
 
@@ -424,11 +438,13 @@ if __name__ == '__main__':
     parser.add_argument('--source_video_path', type=str, required=True)
     parser.add_argument('--target_video_path', type=str, required=True)
     parser.add_argument('--device', type=str, default='cpu')
-    parser.add_argument('--mode', type=Mode, default=Mode.PLAYER_DETECTION)
+    parser.add_argument('--mode', type=str, default='PLAYER_DETECTION')
+    parser.add_argument('--display', action='store_true')
     args = parser.parse_args()
     main(
         source_video_path=args.source_video_path,
         target_video_path=args.target_video_path,
         device=args.device,
-        mode=args.mode
+        mode=args.mode,
+        display=args.display
     )
